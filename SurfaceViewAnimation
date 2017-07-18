@@ -1,0 +1,133 @@
+public class SurfaceViewAnimation {
+    private Map<String, Bitmap> mBitmapCache = new HashMap<>();
+    private SurfaceView mSurfaceView;
+    private SurfaceHolder mSurfaceHolder;
+    private List<String> mPathList;
+    private MyCallBack mCallBack;
+    private int mFrameTime = 100;
+    private int mCacheCount = 29;
+    private AssetManager assetManager;
+
+    public void setSurfaceView(SurfaceView surfaceView, Context context) {
+        this.mSurfaceView = surfaceView;
+        this.mSurfaceHolder = surfaceView.getHolder();
+        mCallBack = new MyCallBack();
+        mSurfaceHolder.setFormat(PixelFormat.TRANSLUCENT);
+        mSurfaceView.setZOrderOnTop(true);
+        mSurfaceHolder.addCallback(mCallBack);
+        assetManager = context.getAssets();
+    }
+
+    public void startAnimation(List<String> pathList) {
+        if (pathList == null || pathList.size() <= 1) {
+            return;
+        }
+        this.mPathList = pathList;
+        mCallBack.startAnim(pathList);
+    }
+
+    public void setFrameTime(int time) {
+        this.mFrameTime = time;
+    }
+
+    public void stopAnimation() {
+        mCallBack.stopAnim();
+    }
+
+    public void setCacheCount(int count) {
+        mCacheCount = count;
+    }
+
+
+    private class MyCallBack implements SurfaceHolder.Callback {
+        private Canvas mCanvas;
+        private Bitmap mCurrentBitmap;
+        private int position = 0;
+        private Thread drawThread;
+        private Rect rect = new Rect();
+
+        @Override
+        public void surfaceCreated(SurfaceHolder holder) {
+
+        }
+
+        @Override
+        public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {
+            rect.set(0, 0, width, height);
+        }
+
+        @Override
+        public void surfaceDestroyed(SurfaceHolder holder) {
+
+        }
+
+        private void drawBitmap(List<String> mPathList) {
+            try {
+                if (position >= mPathList.size()) {
+                    position = 0;
+                }
+                mCurrentBitmap = BitmapFactory.decodeStream(assetManager.open("loading" + "/" +
+                        mPathList.get(position)));
+                mCanvas = mSurfaceHolder.lockCanvas(rect);
+                if (mCanvas == null) {
+                    return;
+                }
+                mCanvas.drawColor(Color.TRANSPARENT, PorterDuff.Mode.CLEAR);
+                mCanvas.drawBitmap(mCurrentBitmap, null, rect, null);
+            } catch (RuntimeException e) {
+                e.getMessage();
+            } catch (IOException e) {
+                e.printStackTrace();
+            } finally {
+
+                position++;
+
+                if (position >= mPathList.size()) {
+                    position = 0;
+                }
+                if (mCanvas != null) {
+                    // 将画布解锁并显示在屏幕上
+                    if (mSurfaceHolder != null) {
+                        mSurfaceHolder.unlockCanvasAndPost(mCanvas);
+                    }
+                }
+
+                if (mCurrentBitmap != null) {
+                    // 收回图片
+                    mCurrentBitmap.recycle();
+                }
+            }
+        }
+
+        private void startAnim(final List<String> mPathList) {
+            drawThread = new Thread() {
+                @Override
+                public void run() {
+                    super.run();
+                    while (true) {
+                        try {
+                            long now = System.currentTimeMillis();
+                            drawBitmap(mPathList);
+                            // 100ms draw one frame , you can change this time
+                            sleep(mFrameTime - (System.currentTimeMillis() - now) > 0
+                                    ? mFrameTime - (System.currentTimeMillis() - now) : 0);
+                        } catch (InterruptedException e1) {
+                            e1.printStackTrace();
+                            drawThread.interrupt();
+                        }
+                    }
+                }
+            };
+            drawThread.start();
+        }
+
+        private void stopAnim() {
+            position = 0;
+            mBitmapCache.clear();
+            mPathList.clear();
+            // this is necessary
+            drawThread.interrupt();
+
+        }
+    }
+}
